@@ -1,0 +1,21 @@
+import os
+from snakemake.remote.HTTP import RemoteProvider as HTTPRemoteProvider
+
+HTTP = HTTPRemoteProvider()
+
+BASE_URL = "datadryad.org/bitstream/handle/10255/dryad.98949"
+ZIP_URL = BASE_URL + "/" + "WoodProductionMaps.zip"
+README_FILE = "README.txt"
+README_URL = BASE_URL + "/" + "README.txt"
+
+rule get_data:
+    input:
+        zip=HTTP.remote(ZIP_URL, keep_local=False),
+        readme=HTTP.remote(README_URL, keep_local=False)
+    output:
+        "data"
+    log:
+        "log/getdata.log"
+    run:
+        shell("unzip {input.zip} -d {output} >& {log}")
+        shell("mv {input.readme} {output} >& {log}")
