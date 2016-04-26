@@ -1,3 +1,4 @@
+import glob
 import os
 from snakemake.remote.HTTP import RemoteProvider as HTTPRemoteProvider
 
@@ -8,14 +9,57 @@ ZIP_URL = BASE_URL + "/" + "WoodProductionMaps.zip"
 README_FILE = "README.txt"
 README_URL = BASE_URL + "/" + "README.txt"
 
+DATASETS = ['woodprod_2000', 'woodprod_2001', 'woodprod_2002', 'woodprod_2003',
+            'woodprod_2004', 'woodprod_2005', 'woodprod_2006', 'woodprod_2007',
+            'woodprod_2008', 'woodprod_2009', 'woodprod_2010',
+            'woodprod_average']
+
+rule all:
+  input:
+    expand("data/wood_productions_maps/{dataset}.{ext}", dataset=DATASETS, ext=['tif'])
+
 rule get_data:
     input:
         zip=HTTP.remote(ZIP_URL, keep_local=False),
         readme=HTTP.remote(README_URL, keep_local=False)
+    params:
+        data_dir="data/wood_productions_maps"
     output:
-        "data"
+        temp("data/org/wood_productions_maps")    
     log:
         "log/getdata.log"
     run:
-        shell("unzip {input.zip} -d {output} >& {log}")
-        shell("mv {input.readme} {output} >& {log}")
+        shell("mkdir -p {output}")
+        shell("unzip -j {input.zip} -d {output} >& {log}")
+        shell("mkdir -p {params.data_dir}")
+        shell("mv {input.readme} {params.data_dir}/README.txt >& {log}")
+
+# Rule to translate all rasters using compression. Also, translation makes
+# the use of TFW files unnecessary. Rename the files at the same time: get rid
+# of of whitespaces and put names in full lower case.
+rule translate:
+    input:
+        dir="data/org/wood_productions_maps"
+    output:
+        dir="data/wood_productions_maps",
+        dst_rasters=expand("data/wood_productions_maps/{dataset}.{ext}", dataset=DATASETS, ext=['tif'])
+    log:
+        "log/translate.log"
+    message: "Translating files in {input.dir}"
+    run:
+        src_rasters = glob.glob("{0}/*.tif".format(input))
+        # Clean the log
+        shell('echo "" > {0} 2>&1'.format(log))
+        # The output needs to be manually created if it doesn't exist
+        shell("mkdir -p {output.dir}")
+        for i in range(0, len(src_rasters)):
+            original_raster = src_rasters[i]
+            # There might be a whitespace at the end of the basename
+            raster = original_raster.replace(" .", ".")
+            # Replace " " with "_" and turn name into lower case
+            raster = raster.replace(" ", "_").lower()
+            # Place translated files to "data" dir
+            raster = raster.replace(input.dir, output.dir)
+            # Traslate using gdal_translate, comress using DEFLATE
+            shell('echo "Traslating {0} to {1}" >> {2} 2>&1'.format(original_raster, raster, log))
+            shell("gdal_translate -of GTiff -co COMPRESS=DEFLATE '{0}' '{1}' >> {2} 2>&1".format(original_raster, raster, log))
