@@ -16,7 +16,8 @@ DATASETS = ['woodprod_2000', 'woodprod_2001', 'woodprod_2002', 'woodprod_2003',
 
 rule all:
   input:
-    expand("data/wood_productions_maps/{dataset}.{ext}", dataset=DATASETS, ext=['tif'])
+    expand("data/wood_productions_maps/{dataset}.{ext}", dataset=DATASETS, ext=['tif']),
+    "data/datapackage.json"
 
 rule get_data:
     input:
@@ -25,7 +26,7 @@ rule get_data:
     params:
         data_dir="data/wood_productions_maps"
     output:
-        temp("data/org/wood_productions_maps")    
+        temp("data/org/wood_productions_maps")
     log:
         "log/getdata.log"
     run:
@@ -63,3 +64,19 @@ rule translate:
             # Traslate using gdal_translate, comress using DEFLATE
             shell('echo "Traslating {0} to {1}" >> {2} 2>&1'.format(original_raster, raster, log))
             shell("gdal_translate -of GTiff -co COMPRESS=DEFLATE '{0}' '{1}' >> {2} 2>&1".format(original_raster, raster, log))
+
+# Rule to create datapackage metadata for the resources
+rule create_metadata:
+    params:
+        # This Google spreadsheet holds metadata for PGs datasets.
+        gspread_uri="https://docs.google.com/spreadsheets/d/1MmWfJWktF33SMscCfUzE-GhYj1X0M4HB3FOF9IbHPjk/edit?usp=sharing",
+        gpsread_spreadsheet_name="EG-dmp",
+        gpsread_worksheet_name="datasets",
+        gpsread_credentials="scripts/secret-EGpackager-4b30d0d339ed.json"
+    input:
+        all_rasters=expand("data/wood_productions_maps/{dataset}.{ext}", dataset=DATASETS, ext=['tif']),
+        rerefence_raster="data/wood_productions_maps/woodprod_average.tif"
+    output:
+        "data/datapackage.json"
+    script:
+        "scripts/create_metadata.py"
