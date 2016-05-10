@@ -1,2 +1,3 @@
 .directory
 .snakemake
+secret*.json
